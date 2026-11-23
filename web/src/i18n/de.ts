@@ -127,6 +127,8 @@ export const de: Catalogue = {
   'claude.recheck': 'Erneut prüfen',
   'claude.signOut': 'Trennen',
   'claude.openPage': 'Claude-Anmeldeseite öffnen',
+  'claude.codeLabel': 'Code von claude.ai einfügen',
+  'claude.codeSend': 'Verbinden',
   'claude.note': '<strong>Dein Claude-Konto, nur für dieses Spiel auf diesem Computer verbunden.</strong> Du meldest dich auf claude.ai an, und Claude Code bewahrt die Anmeldung auf; das Spiel sieht weder Passwort noch Code oder Tokens. „Trennen“ entfernt sie.',
   'key.failed': 'Der Schlüssel konnte nicht geprüft werden. Versuch’s noch mal.',
   'key.recommended': 'Empfohlen',

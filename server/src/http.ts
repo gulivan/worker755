@@ -13,7 +13,7 @@ import type { ManagerDriver } from './manager.ts';
 import { freeModels, isModelId, keyModels, listModels, MOCK_MODEL } from './models.ts';
 import { isScenarioId, SCENARIO_LIST } from './scenarios.ts';
 import type { KeyProblem, ModelOption } from './models.ts';
-import { hostedCredentials, isPlausibleKey, isProviderId, localIsClaudeCode, localUrl, providerList } from './providers.ts';
+import { hostedCredentials, isPlausibleKey, isProviderId, localHeaders, localIsClaudeCode, localUrl, providerList } from './providers.ts';
 import type { Credentials, ProviderId } from './providers.ts';
 import { parseSync, SYNC_BODY_CAP, SyncError } from './sync.ts';
 import { WEB } from './web.ts';
@@ -500,28 +500,39 @@ export function createApp(opts: AppOptions): App {
   const localOpen = (req: IncomingMessage) => !localIsClaudeCode() || onThisMachine(req);
   /** Checks of Claude Code are the operator's own, at this machine (playerCredentials saw to that): they are not rationed. */
   const ownMachine = (cred: Credentials) => cred.provider === 'local' && localIsClaudeCode();
-  const LOCAL_ONLY = 'Claude Code can only be used from the computer it runs on.';
 
   /** Asks the Claude Code bridge about its sign-in. Credentials are never part of what it answers. */
-  async function bridge(method: 'GET' | 'POST', path: string): Promise<unknown> {
+  async function bridge(
+    method: 'GET' | 'POST',
+    path: string,
+    errors: ReturnType<typeof copyFor>['errors'],
+    body?: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    let res: Response;
     try {
-      const res = await fetch(`${localUrl()}${path}`, {
+      res = await fetch(`${localUrl()}${path}`, {
         method,
-        headers: { authorization: `Bearer ${process.env.LOCAL_LLM_API_KEY ?? ''}` },
+        headers: {
+          ...localHeaders(),
+          authorization: `Bearer ${process.env.LOCAL_LLM_API_KEY ?? ''}`,
+          ...(body && { 'content-type': 'application/json' }),
+        },
+        ...(body && { body: JSON.stringify(body) }),
         signal: AbortSignal.timeout(20_000),
       });
-      if (!res.ok) throw new Error();
-      return await res.json();
     } catch {
-      throw new HttpError(502, 'Claude Code did not answer.');
+      throw new HttpError(502, errors.claudeCodeDown);
     }
+    const out = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!res.ok || !out) throw new HttpError(502, path.endsWith('/logout') ? errors.claudeSignOutFailed : errors.claudeCodeDown);
+    return out;
   }
 
   /** A player's key must work before it gets a shift: an unchecked string would cost nothing to spam. */
   /** The provider and key a player sent; the local model server takes no key. */
   function playerCredentials(req: IncomingMessage, body: Record<string, unknown>, errors: ReturnType<typeof copyFor>['errors']): Credentials {
     if (!isProviderId(body.provider)) throw new HttpError(400, 'Unknown provider');
-    if (body.provider === 'local' && !localOpen(req)) throw new HttpError(403, LOCAL_ONLY);
+    if (body.provider === 'local' && !localOpen(req)) throw new HttpError(403, errors.localOnly);
     if (body.provider === 'local') return { provider: 'local', apiKey: '' };
     if (!isPlausibleKey(body.apiKey)) throw new HttpError(400, errors.notAKey);
     return { provider: body.provider, apiKey: body.apiKey };
@@ -749,7 +760,7 @@ export function createApp(opts: AppOptions): App {
       // Without ?provider: the free-shift models. With it: what a player's own key can use there.
       const p = url.searchParams.get('provider');
       if (p !== null && !isProviderId(p)) throw new HttpError(400, 'Unknown provider');
-      if (p === 'local' && !localOpen(req)) throw new HttpError(403, LOCAL_ONLY);
+      if (p === 'local' && !localOpen(req)) throw new HttpError(403, copyFor('en').errors.localOnly);
       // A signed-in player who has topped up may use every model on offer on our key.
       const a = p ? null : accountOf(req);
       const list = p ? await models(p) : !serverShifts() ? [] : a ? await accountModels(a) : await freeList();
@@ -771,32 +782,47 @@ export function createApp(opts: AppOptions): App {
     }
 
     if (path === '/api/claude-code' && (method === 'GET' || method === 'POST')) {
-      // Whether Claude Code on this machine is signed in (GET), or have it start its own sign-in (POST).
-      // The sign-in happens between Claude Code and claude.ai in the player's browser; no code, token
-      // or account name passes through here.
+      // Whether Claude Code on this machine is signed in (GET), or have it start its own sign-in,
+      // take the code claude.ai showed, or sign out (POST). The sign-in happens between Claude Code
+      // and claude.ai; no token or account name passes through here, only a one-time code the
+      // player pastes when the browser could not hand it to Claude Code by itself.
       if (!localIsClaudeCode()) throw new HttpError(404, 'Not found');
-      if (!onThisMachine(req)) throw new HttpError(403, LOCAL_ONLY);
+      const query = url.searchParams.get('language');
+      let body: Record<string, unknown> = {};
       if (method === 'POST') {
         // Only this page's own script sends JSON; a form on another site cannot.
         if (!/^application\/json\b/i.test(String(req.headers['content-type'] ?? ''))) throw new HttpError(415, 'JSON only');
-        const action = (await readJson(req, 2_000)).action;
-        if (action !== 'signIn' && action !== 'signOut') throw new HttpError(400, 'Unknown action');
-        await bridge('POST', action === 'signIn' ? '/auth/login' : '/auth/logout');
+        body = await readJson(req, 4_000);
+      }
+      const errors = copyFor(isLanguage(body.language) ? body.language : isLanguage(query) ? query : 'en').errors;
+      if (!onThisMachine(req)) throw new HttpError(403, errors.localOnly);
+      if (method === 'POST') {
+        const action = body.action;
         if (action === 'signIn') {
+          await bridge('POST', '/auth/login', errors);
           // Claude Code prints the address of its sign-in page a moment after it starts.
           for (let i = 0; i < 20; i++) {
-            const now = (await bridge('GET', '/auth')) as Record<string, unknown>;
-            if (now.url || now.signedIn === true || now.signingIn !== true) break;
+            const now = await bridge('GET', '/auth?quick=1', errors);
+            if (now.url || now.signingIn !== true) break;
             await new Promise((r) => setTimeout(r, 250));
           }
-        }
+        } else if (action === 'code') {
+          const code = typeof body.code === 'string' ? body.code.trim() : '';
+          if (!/^[\w#.~-]{8,512}$/.test(code)) throw new HttpError(400, 'Not a sign-in code');
+          await bridge('POST', '/auth/code', errors, { code });
+        } else if (action === 'signOut') {
+          await bridge('POST', '/auth/logout', errors);
+          // The next shift must ask Claude Code again rather than trust an earlier check.
+          verified.delete(keyHash({ provider: 'local', apiKey: '' }));
+        } else throw new HttpError(400, 'Unknown action');
       }
-      const s = (await bridge('GET', '/auth')) as Record<string, unknown>;
+      const s = await bridge('GET', '/auth', errors);
       return sendJson(res, 200, {
         installed: s.installed === true,
         signedIn: s.signedIn === true,
         plan: typeof s.plan === 'string' ? s.plan.slice(0, 40) : '',
         signingIn: s.signingIn === true,
+        needsCode: s.signingIn === true && s.needsCode === true,
         // Only ever Claude's own sign-in page.
         url: typeof s.url === 'string' && /^https:\/\/claude\.ai\/[^\s"'<>]{1,2000}$/.test(s.url) ? s.url : '',
       });

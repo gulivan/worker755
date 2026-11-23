@@ -1,5 +1,5 @@
 import { createGateway } from 'ai';
-import { DIRECT_MODELS, isDirect, localUrl, providerModelId } from './providers.ts';
+import { DIRECT_MODELS, isDirect, localHeaders, localUrl, providerModelId } from './providers.ts';
 import type { Credentials, ProviderId } from './providers.ts';
 
 export interface ModelOption {
@@ -155,7 +155,7 @@ async function localModels(): Promise<ModelOption[]> {
   const base = localUrl();
   if (!base) return [];
   const key = process.env.LOCAL_LLM_API_KEY;
-  const body = await getJson(`${base}/models`, key ? { authorization: `Bearer ${key}` } : {});
+  const body = await getJson(`${base}/models`, { ...localHeaders(), ...(key ? { authorization: `Bearer ${key}` } : {}) });
   return entries(body)
     .flatMap((m) => (typeof m.id === 'string' && !/embed/i.test(m.id) ? [{ id: m.id, label: m.id }] : []))
     .sort((a, b) => a.id.localeCompare(b.id));

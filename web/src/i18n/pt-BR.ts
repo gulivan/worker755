@@ -127,6 +127,8 @@ export const ptBR: Catalogue = {
   'claude.recheck': 'Verificar de novo',
   'claude.signOut': 'Desconectar',
   'claude.openPage': 'Abrir a página de login do Claude',
+  'claude.codeLabel': 'Cole o código do claude.ai',
+  'claude.codeSend': 'Conectar',
   'claude.note': '<strong>Sua conta do Claude, conectada só para este jogo neste computador.</strong> Você faz login em claude.ai e o Claude Code guarda o login; o jogo nunca vê sua senha, código ou tokens. Desconectar remove o login.',
   'key.failed': 'Não foi possível verificar a chave. Tente de novo.',
   'key.recommended': 'Recomendado',

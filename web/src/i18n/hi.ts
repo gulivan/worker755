@@ -127,6 +127,8 @@ export const hi: Catalogue = {
   'claude.recheck': 'फिर से जाँचो',
   'claude.signOut': 'डिस्कनेक्ट करो',
   'claude.openPage': 'Claude का साइन-इन पेज खोलो',
+  'claude.codeLabel': 'claude.ai से कोड पेस्ट करो',
+  'claude.codeSend': 'कनेक्ट करो',
   'claude.note': '<strong>तुम्हारा Claude अकाउंट, सिर्फ़ इस गेम के लिए और सिर्फ़ इसी कंप्यूटर पर कनेक्ट।</strong> तुम claude.ai पर साइन इन करते हो और Claude Code साइन-इन को अपने पास रखता है; गेम कभी तुम्हारा पासवर्ड, कोड या टोकन नहीं देखता। डिस्कनेक्ट करने पर यह हट जाता है।',
   'key.failed': 'की की जाँच नहीं हो सकी। फिर कोशिश करो।',
   'key.recommended': 'अनुशंसित',

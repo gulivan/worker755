@@ -127,6 +127,8 @@ export const ru: Catalogue = {
   'claude.recheck': 'Проверить ещё раз',
   'claude.signOut': 'Отключить',
   'claude.openPage': 'Открыть страницу входа Claude',
+  'claude.codeLabel': 'Вставь код с claude.ai',
+  'claude.codeSend': 'Подключить',
   'claude.note': '<strong>Твой аккаунт Claude, подключённый только для этой игры на этом компьютере.</strong> Ты входишь на claude.ai, а вход хранит Claude Code; игра не видит ни пароль, ни код, ни токены. «Отключить» удаляет его.',
   'key.failed': 'Не удалось проверить ключ. Попробуй ещё раз.',
   'key.recommended': 'Рекомендуем',

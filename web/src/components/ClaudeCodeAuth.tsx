@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { client } from '../api/client';
+import { ApiError } from '../api/errors';
 import type { ClaudeCodeStatus } from '../api/types';
 import { t } from '../i18n';
 import { rich } from '../i18n/rich';
@@ -18,21 +19,32 @@ export function ClaudeCodeAuth({ className, onChange }: { className?: string; on
   const [down, setDown] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** What went wrong with the last thing the player asked for, in the server's words. */
+  const [problem, setProblem] = useState('');
+  const [code, setCode] = useState('');
   const was = useRef<boolean | null>(null);
   const until = useRef(0);
 
-  const load = async (action?: 'signIn' | 'signOut') => {
+  const load = async (action?: 'signIn' | 'signOut' | 'code', value?: string) => {
     try {
-      const s = await client.claudeCode(action);
+      const s = await client.claudeCode(action, value);
       setStatus(s);
       setDown(false);
+      setProblem('');
       if (s.signedIn || (action !== 'signIn' && !s.signingIn)) setWaiting(false);
       // The models on offer follow the connection, so the form hears of it first and whenever it changes.
       if (was.current !== s.signedIn) onChange?.(s.signedIn);
       was.current = s.signedIn;
-    } catch {
-      setDown(true);
-      setWaiting(false);
+    } catch (err) {
+      // A refused action (a sign-out that did not happen, a code that was not taken) is said as such;
+      // anything else means Claude Code is out of reach.
+      if (action && err instanceof ApiError && err.status > 0) {
+        setProblem(err.message);
+        if (action === 'signIn') setWaiting(false);
+      } else {
+        setDown(true);
+        setWaiting(false);
+      }
     }
   };
 
@@ -60,6 +72,13 @@ export function ClaudeCodeAuth({ className, onChange }: { className?: string; on
   const signOut = async () => {
     setBusy(true);
     await load('signOut');
+    setBusy(false);
+  };
+
+  const sendCode = async () => {
+    setBusy(true);
+    await load('code', code.trim());
+    setCode('');
     setBusy(false);
   };
 
@@ -100,7 +119,34 @@ export function ClaudeCodeAuth({ className, onChange }: { className?: string; on
             {t('claude.openPage')}
           </a>
         )}
+        {problem && (
+          <span className="key-status key-bad" role="alert">
+            {problem}
+          </span>
+        )}
       </div>
+      {waiting && !signedIn && status?.needsCode && (
+        <form
+          className="key-check"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (code.trim()) void sendCode();
+          }}
+        >
+          <input
+            className="input"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder={t('claude.codeLabel')}
+            aria-label={t('claude.codeLabel')}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <button type="submit" className="btn btn-small" disabled={busy || !code.trim()}>
+            {t('claude.codeSend')}
+          </button>
+        </form>
+      )}
       <p className="key-note">
         <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden>
           <rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />

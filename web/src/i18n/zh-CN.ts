@@ -127,6 +127,8 @@ export const zhCN: Catalogue = {
   'claude.recheck': '再次检查',
   'claude.signOut': '断开连接',
   'claude.openPage': '打开 Claude 登录页面',
+  'claude.codeLabel': '粘贴来自 claude.ai 的代码',
+  'claude.codeSend': '连接',
   'claude.note': '<strong>你的 Claude 账户，仅为这台电脑上的这个游戏连接。</strong>你在 claude.ai 上登录，由 Claude Code 保存登录状态；游戏永远看不到你的密码、验证码或令牌。断开连接会将其移除。',
   'key.failed': '无法检查密钥。再试一次。',
   'key.recommended': '推荐',

@@ -129,6 +129,8 @@ export const en = {
   'claude.recheck': 'Check again',
   'claude.signOut': 'Disconnect',
   'claude.openPage': 'Open the Claude sign-in page',
+  'claude.codeLabel': 'Paste the code from claude.ai',
+  'claude.codeSend': 'Connect',
   'claude.note': '<strong>Your Claude account, connected for this game on this computer only.</strong> You sign in on claude.ai and Claude Code keeps the sign-in; the game never sees your password, code or tokens. Disconnect removes it.',
   'key.failed': 'Could not check the key. Try again.',
   'key.recommended': 'Recommended',

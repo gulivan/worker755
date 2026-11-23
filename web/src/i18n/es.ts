@@ -127,6 +127,8 @@ export const es: Catalogue = {
   'claude.recheck': 'Comprobar de nuevo',
   'claude.signOut': 'Desconectar',
   'claude.openPage': 'Abrir la página de inicio de sesión de Claude',
+  'claude.codeLabel': 'Pega el código de claude.ai',
+  'claude.codeSend': 'Conectar',
   'claude.note': '<strong>Tu cuenta de Claude, conectada solo para este juego en este ordenador.</strong> Inicias sesión en claude.ai y Claude Code guarda la sesión; el juego nunca ve tu contraseña, código ni tokens. Desconectar la elimina.',
   'key.failed': 'No se pudo comprobar la clave. Inténtalo de nuevo.',
   'key.recommended': 'Recomendado',

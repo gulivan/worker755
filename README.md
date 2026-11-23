@@ -99,6 +99,21 @@ This is for playing on your own computer only, because it runs on your own Claud
 bridge listens on 127.0.0.1 and answers only the game, the game offers it only to a browser on the
 same machine, and `play:claude` refuses to start with `HOST` or `TRUST_PROXY` set for hosting. A
 hosted game takes each player's own API key.
+Don't put a reverse proxy or tunnel in front of it: one that forwards other machines' requests
+without `X-Forwarded-For` would make them look local.
+
+If claude.ai cannot hand the sign-in back to Claude Code, the start screen asks for the code it
+shows. On Windows, use the native `claude.exe` (set `CLAUDE_BIN` if it is not on PATH); npm's
+`.cmd` shim cannot be started directly. To run the bridge on its own, set the same random
+`CLAUDE_BRIDGE_TOKEN` for it and as the game's `LOCAL_LLM_API_KEY`, with
+`LOCAL_LLM_URL=http://127.0.0.1:8756/v1` and `LOCAL_LLM_KIND=claude-code`.
+
+### HTTPS and keys
+
+The browser sends a player's API key only from HTTPS, localhost, or a private-network address
+(192.168.x.x, 10.x.x.x, `name.local` and the like), so a key never crosses the internet in the
+clear. With an `https://` `PUBLIC_URL` the server also sends `Strict-Transport-Security` for a
+year: browsers then keep to HTTPS on that host name even if you later serve it over HTTP.
 
 ### Docker
 

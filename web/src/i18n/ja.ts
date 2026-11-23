@@ -127,6 +127,8 @@ export const ja: Catalogue = {
   'claude.recheck': 'もう一度確認',
   'claude.signOut': '接続を解除',
   'claude.openPage': 'Claude のサインインページを開く',
+  'claude.codeLabel': 'claude.ai のコードを貼り付けて',
+  'claude.codeSend': '接続',
   'claude.note': '<strong>あなたの Claude アカウントを、このコンピューター上のこのゲームだけに接続します。</strong>サインインは claude.ai で行い、Claude Code がそれを保持します。ゲームがパスワード、コード、トークンを見ることはありません。接続を解除すると削除されます。',
   'key.failed': 'キーを確認できませんでした。もう一度お試しください。',
   'key.recommended': 'おすすめ',

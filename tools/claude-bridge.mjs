@@ -7,17 +7,22 @@
 // A shift's manager is one Claude Code session that stays open: the game resends the whole
 // conversation with every request, the bridge recognises the one it is already holding and passes
 // on only what is new (tool results, the user's messages). The user (Dan) is a second session that
-// remembers what he has said during the shift.
+// remembers what he has said during the shift. The game names each conversation (a header), so two
+// shifts never share a session.
 //
-//   node tools/claude-bridge.mjs          the bridge alone, on http://127.0.0.1:8756/v1
 //   node tools/claude-bridge.mjs --play   the bridge and the game together (npm run play:claude)
+//   CLAUDE_BRIDGE_TOKEN=… node tools/claude-bridge.mjs
+//                                         the bridge alone, on http://127.0.0.1:8756/v1; start the game
+//                                         with LOCAL_LLM_URL, LOCAL_LLM_KIND=claude-code and the same
+//                                         token as LOCAL_LLM_API_KEY
 //
 // CLAUDE_BRIDGE_PORT, CLAUDE_BIN, CLAUDE_BRIDGE_MODELS (comma separated) and CLAUDE_BRIDGE_EFFORT
 // override the defaults.
 //
 // The Claude account here is the one of whoever runs this, so the bridge is for that person alone:
 //   - it listens on 127.0.0.1 only and answers only requests that carry its token (made anew on
-//     every start and handed to the game as LOCAL_LLM_API_KEY), never ones a web page sent;
+//     every start and handed to the game as LOCAL_LLM_API_KEY) and say the game knows it is Claude
+//     Code (so the game applies its this-machine-only rule), never ones a web page sent;
 //   - it never reads, holds or passes on Claude credentials: signing in is done by Claude Code
 //     itself (`claude auth login`), and the model runs without tools, so nothing a player types
 //     can make it read files or run commands on this machine;
@@ -25,11 +30,15 @@
 //     from the one this machine's user works with (CLAUDE_BRIDGE_CONFIG_DIR), so the game starts
 //     out not connected, is connected from its start screen, and can be disconnected there without
 //     touching that user's own Claude Code;
-//   - --play refuses to start a game that is open to other machines.
+//   - --play refuses to start a game that is open to other machines. Anything that relays other
+//     machines' requests to the game as if they came from this one (a reverse proxy or tunnel that
+//     drops the forwarding headers) defeats that: do not put one in front of it.
+//   - Claude Code gets none of this environment's Anthropic or Claude Code settings (keys, base URLs,
+//     Bedrock or Vertex), and works in a private temporary folder that is removed on exit.
 
 import { spawn } from 'node:child_process';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -48,13 +57,18 @@ const IDLE_MS = 30 * 60_000;
 const MAX_SESSIONS = 12;
 
 /** What the game must send as its API key. Given to the game by --play, or set by hand on both sides. */
+const PLAY = process.argv.includes('--play');
+if (!PLAY && !process.env.CLAUDE_BRIDGE_TOKEN) {
+  console.error('[claude-bridge] Set CLAUDE_BRIDGE_TOKEN (and the same value as the game\'s LOCAL_LLM_API_KEY), or run npm run play:claude.');
+  process.exit(1);
+}
 const TOKEN = process.env.CLAUDE_BRIDGE_TOKEN || randomBytes(32).toString('base64url');
 const MAX_BODY = 4_000_000;
 
 // Claude Code runs in an empty directory of its own, so it has no project to look at. Claude Code
 // tells the model where it runs, so the place must not give away the name of this machine's user.
-const WORK_DIR = join(process.platform === 'win32' ? process.env.ProgramData || tmpdir() : tmpdir(), 'worker755-claude-bridge');
-mkdirSync(WORK_DIR, { recursive: true });
+// A fresh folder for each run, private to this user (mkdtemp makes it 0700), removed on exit.
+const WORK_DIR = mkdtempSync(join(process.platform === 'win32' ? process.env.ProgramData || tmpdir() : tmpdir(), 'worker755-claude-'));
 
 // The game's own Claude Code profile: its sign-in lives here and nowhere else, outside the game's folder.
 const CONFIG_DIR =
@@ -67,9 +81,14 @@ const CONFIG_DIR =
     'claude-code',
   );
 mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
-/** What every Claude Code process here runs with: that profile, and no credentials from the environment. */
-const CLAUDE_ENV = { ...process.env, CLAUDE_CONFIG_DIR: CONFIG_DIR };
-for (const name of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN']) delete CLAUDE_ENV[name];
+/**
+ * What every Claude Code process here runs with: that profile, and nothing from the environment
+ * that would choose another account or backend (API keys, ANTHROPIC_BASE_URL, Bedrock, Vertex).
+ */
+const CLAUDE_ENV = Object.fromEntries(
+  Object.entries(process.env).filter(([name]) => !/^(ANTHROPIC_|CLAUDE_|AWS_BEARER_TOKEN_BEDROCK$)/.test(name)),
+);
+CLAUDE_ENV.CLAUDE_CONFIG_DIR = CONFIG_DIR;
 
 const log = (msg) => console.log(`[claude-bridge] ${msg}`);
 const sha = (s) => createHash('sha256').update(s).digest('hex');
@@ -81,13 +100,15 @@ function textOf(content) {
   return content.map((p) => (typeof p === 'string' ? p : typeof p?.text === 'string' ? p.text : '')).join('');
 }
 
+/** A call's arguments as an object, or null when they are not one. */
 function parseArgs(raw) {
-  if (raw && typeof raw === 'object') return raw;
+  if (raw === undefined || raw === null || raw === '') return {};
+  if (typeof raw === 'object') return Array.isArray(raw) ? null : raw;
   try {
-    const v = JSON.parse(raw || '{}');
-    return v && typeof v === 'object' ? v : {};
+    const v = JSON.parse(raw);
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : null;
   } catch {
-    return {};
+    return null;
   }
 }
 
@@ -128,6 +149,9 @@ function parseReply(raw) {
     const v = JSON.parse(s.slice(from, to + 1));
     if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
     if (typeof v.text !== 'string' && !Array.isArray(v.tool_calls)) return null;
+    // A call that is not {name, arguments-object} is a malformed reply, asked for again, not a call to drop.
+    if (v.tool_calls !== undefined && !Array.isArray(v.tool_calls)) return null;
+    for (const c of v.tool_calls ?? []) if (!c || typeof c.name !== 'string' || parseArgs(c.arguments) === null) return null;
     return v;
   } catch {
     return null;
@@ -145,7 +169,7 @@ function render(messages, names) {
       if (text) parts.push(text);
       for (const c of m.tool_calls ?? []) {
         names.set(c.id, c.function?.name);
-        parts.push(`<tool_call name="${c.function?.name}">${JSON.stringify(parseArgs(c.function?.arguments))}</tool_call>`);
+        parts.push(`<tool_call name="${c.function?.name}">${JSON.stringify(parseArgs(c.function?.arguments) ?? {})}</tool_call>`);
       }
       out.push(`<assistant>\n${parts.join('\n')}\n</assistant>`);
     } else if (m.role === 'tool') {
@@ -165,6 +189,9 @@ function mark(m) {
   return `u:${textOf(m.content)}`;
 }
 
+/** Every Claude Code process the bridge has running, wherever it is filed: closeAll and the cap count these. */
+const live = new Set();
+
 /** One Claude Code process that stays open and takes one message after another. */
 class ClaudeSession {
   constructor(model, system) {
@@ -176,7 +203,8 @@ class ClaudeSession {
     this.queue = Promise.resolve();
     this.stderr = '';
     this.systemFile = join(WORK_DIR, `system-${randomUUID()}.txt`);
-    writeFileSync(this.systemFile, system || 'You are a helpful assistant.');
+    writeFileSync(this.systemFile, system || 'You are a helpful assistant.', { mode: 0o600 });
+    live.add(this);
     this.child = spawn(
       CLAUDE,
       [
@@ -197,6 +225,7 @@ class ClaudeSession {
       { cwd: WORK_DIR, env: CLAUDE_ENV, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] },
     );
     this.child.stdin.on('error', () => {});
+    this.child.stderr.setEncoding('utf8');
     this.child.stderr.on('data', (d) => (this.stderr = (this.stderr + d).slice(-2000)));
     createInterface({ input: this.child.stdout }).on('line', (line) => {
       let event;
@@ -217,7 +246,13 @@ class ClaudeSession {
       this.close();
     });
     this.child.on('error', (err) =>
-      this.fail({ status: 500, message: 'Claude Code could not be started', detail: `could not run "${CLAUDE}": ${err.message}. Is it installed and on PATH?` }),
+      this.fail({
+        status: 500,
+        message: 'Claude Code could not be started',
+        detail:
+          `could not run "${CLAUDE}": ${err.message}. Is it installed and on PATH?` +
+          (process.platform === 'win32' ? ' On Windows, point CLAUDE_BIN at claude.exe (the native install), not an npm .cmd shim.' : ''),
+      }),
     );
     this.child.on('close', (code) =>
       this.fail({ status: 502, message: 'Claude Code stopped', detail: `exit ${code}: ${this.stderr.trim().slice(-400)}` }),
@@ -226,6 +261,7 @@ class ClaudeSession {
 
   fail(error) {
     this.closed = true;
+    live.delete(this);
     rmSync(this.systemFile, { force: true });
     this.pending?.reject(error);
     this.pending = null;
@@ -234,7 +270,11 @@ class ClaudeSession {
   close() {
     if (this.closed) return;
     this.closed = true;
+    live.delete(this);
     this.child.kill();
+    // A turn still waiting ends now rather than at the process's exit.
+    this.pending?.reject({ status: 502, message: 'the Claude Code session has ended' });
+    this.pending = null;
   }
 
   /** Says one thing to the session and resolves with Claude Code's result for that turn. */
@@ -270,29 +310,53 @@ class ClaudeSession {
 
 /** The managers' sessions, each under the fingerprint of the conversation it has had so far. */
 const working = new Map();
-/** Sessions for requests that are one message long (the user's lines, the review), by system prompt. */
+/** Sessions for requests that are one message long (the user's lines, the review), by conversation and system prompt. */
 const oneShot = new Map();
 
-function sweep() {
-  const all = [...working, ...oneShot].map(([key, session]) => ({ key, session, map: working.has(key) ? working : oneShot }));
-  all.sort((a, b) => a.session.lastUsed - b.session.lastUsed);
-  all.forEach((entry, i) => {
-    const { key, session, map } = entry;
-    const extra = all.length - i > MAX_SESSIONS;
-    if (!session.closed && !extra && Date.now() - session.lastUsed < IDLE_MS) return;
-    if (session.pending) return;
-    session.close();
-    map.delete(key);
-  });
+/** Files a session under a key; one that was there and is not this one is closed, so nothing is left running unseen. */
+function file(map, key, session) {
+  const before = map.get(key);
+  if (before && before !== session) before.close();
+  map.set(key, session);
 }
-setInterval(sweep, 60_000).unref();
+
+/** Forgets map entries whose session has ended. */
+function prune() {
+  for (const map of [working, oneShot]) for (const [key, s] of map) if (s.closed) map.delete(key);
+}
+
+/** Closes sessions idle too long, then the least recently used ones beyond the cap (never one mid-turn). */
+function sweep(room = 0) {
+  const all = [...live].sort((a, b) => a.lastUsed - b.lastUsed);
+  let over = all.length + room - MAX_SESSIONS;
+  for (const s of all) {
+    if (s.pending) continue;
+    if (over > 0 || Date.now() - s.lastUsed >= IDLE_MS) {
+      s.close();
+      over--;
+    }
+  }
+  prune();
+}
+setInterval(() => sweep(), 60_000).unref();
+
+/** A new session, once there is room for it. */
+function open(model, system) {
+  sweep(1);
+  if (live.size >= MAX_SESSIONS) throw { status: 503, message: 'too many Claude Code sessions at once' };
+  return new ClaudeSession(model, system);
+}
 
 function closeAll() {
-  for (const s of [...working.values(), ...oneShot.values()]) s.close();
+  for (const s of [...live]) s.close();
+  prune();
 }
-process.on('exit', closeAll);
+process.on('exit', () => {
+  closeAll();
+  rmSync(WORK_DIR, { recursive: true, force: true });
+});
 
-async function complete(body, signal) {
+async function complete(body, signal, conversation) {
   const messages = Array.isArray(body.messages) ? body.messages : [];
   const tools = (Array.isArray(body.tools) ? body.tools : [])
     .filter((t) => t?.type === 'function' && t.function?.name)
@@ -309,7 +373,8 @@ async function complete(body, signal) {
 
   // Fingerprints of the conversation up to and including each message.
   const prints = [];
-  let print = sha(`${model}\n${system}`);
+  const base = sha(`${conversation}\n${model}\n${system}`);
+  let print = base;
   for (const m of rest) prints.push((print = sha(`${print}\n${mark(m)}`)));
 
   let session;
@@ -318,10 +383,9 @@ async function complete(body, signal) {
   const single = !tools.length && rest.length === 1;
   if (single) {
     // A request that stands on its own: it joins the session that has answered this system prompt before.
-    const key = sha(`${model}\n${system}`);
-    session = oneShot.get(key);
+    session = oneShot.get(base);
     how = session && !session.closed ? 'continued' : 'new session';
-    if (how === 'new session') oneShot.set(key, (session = new ClaudeSession(model, system)));
+    if (how === 'new session') file(oneShot, base, (session = open(model, system)));
     prompt = textOf(rest[0].content);
   } else {
     // The session that has had this conversation up to one of our own replies takes only what came after.
@@ -335,12 +399,7 @@ async function complete(body, signal) {
     } else {
       // A shift's first request starts the session; one the bridge has lost track of starts over from the record.
       const fresh = !rest.some((m) => m.role === 'assistant');
-      if (fresh) {
-        // A new shift: the user starts with a clean memory too.
-        for (const s of oneShot.values()) s.close();
-        oneShot.clear();
-      }
-      session = new ClaudeSession(model, system + (tools.length ? toolInstructions(tools) : ''));
+      session = open(model, system + (tools.length ? toolInstructions(tools) : ''));
       prompt = fresh
         ? render(rest, session.names)
         : 'Below is your conversation so far, oldest first: what the user told you, your own earlier turns, ' +
@@ -351,7 +410,14 @@ async function complete(body, signal) {
     if (!tools.length) prompt += `\n\n${PLAIN}`;
   }
 
-  let result = await session.ask(prompt, signal);
+  let result;
+  try {
+    result = await session.ask(prompt, signal);
+  } catch (err) {
+    // A manager's session out of the map would otherwise run on unseen until the sweep.
+    if (!single) session.close();
+    throw err;
+  }
   let text = '';
   let calls = [];
   if (tools.length) {
@@ -359,7 +425,10 @@ async function complete(body, signal) {
     if (!reply) {
       // One more try, with the format spelled out again; after that the words are taken as said.
       log(`${model}: reply was not the JSON object, asking again`);
-      const again = await session.ask(REMINDER, signal);
+      const again = await session.ask(REMINDER, signal).catch((err) => {
+        if (!single) session.close();
+        throw err;
+      });
       reply = parseReply(again.result);
       if (reply) result = again;
       else reply = { text: String(result.result ?? ''), tool_calls: [] };
@@ -371,7 +440,7 @@ async function complete(body, signal) {
       .map((c) => ({
         id: `call_${randomUUID().replaceAll('-', '').slice(0, 24)}`,
         type: 'function',
-        function: { name: c.name, arguments: JSON.stringify(parseArgs(c.arguments)) },
+        function: { name: c.name, arguments: JSON.stringify(parseArgs(c.arguments) ?? {}) },
       }));
     for (const c of calls) session.names.set(c.id, c.function.name);
   } else {
@@ -381,7 +450,7 @@ async function complete(body, signal) {
 
   const message = { role: 'assistant', content: text || null, ...(calls.length && { tool_calls: calls }) };
   // The game sends this reply back with its next request; that is how the session is found again.
-  if (!single) working.set(sha(`${print}\n${mark(message)}`), session);
+  if (!single) file(working, sha(`${print}\n${mark(message)}`), session);
 
   const u = result.usage ?? {};
   const cached = u.cache_read_input_tokens ?? 0;
@@ -420,31 +489,47 @@ function send(res, status, body) {
  */
 function allowed(req) {
   if (req.headers.origin !== undefined || req.headers['sec-fetch-site'] !== undefined) return false;
+  // The game says it knows this is Claude Code; one that does not would offer it to every visitor.
+  if (req.headers['x-worker755-kind'] !== 'claude-code') return false;
   if (!['127.0.0.1', 'localhost'].includes(String(req.headers.host ?? '').replace(/:\d+$/, ''))) return false;
   const given = createHash('sha256').update(String(req.headers.authorization ?? '')).digest();
   return timingSafeEqual(given, createHash('sha256').update(`Bearer ${TOKEN}`).digest());
 }
 
+/** Runs a Claude Code command to its end: its output and exit code, or null when it could not start. */
 function runClaude(args, timeoutMs) {
   return new Promise((resolve) => {
     const child = spawn(CLAUDE, args, { cwd: WORK_DIR, env: CLAUDE_ENV, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
     let out = '';
     const timer = setTimeout(() => child.kill(), timeoutMs);
+    child.stdout.setEncoding('utf8');
     child.stdout.on('data', (d) => (out += d));
-    child.on('error', () => resolve(null));
-    child.on('close', () => {
+    child.on('error', () => {
       clearTimeout(timer);
-      resolve(out);
+      resolve(null);
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      resolve({ out, code });
     });
   });
 }
 
 /** Whether Claude Code is signed in, and on which plan. Who it is signed in as stays on this side. */
+let statusCache = null;
 async function authStatus() {
-  const out = await runClaude(['auth', 'status', '--json'], 15_000);
-  if (out === null) return { installed: false, signedIn: false, plan: '' };
+  // The page asks often while a sign-in is under way; one look every two seconds is plenty.
+  if (statusCache && Date.now() - statusCache.at < 2_000) return statusCache.value;
+  const value = await readStatus();
+  statusCache = { at: Date.now(), value };
+  return value;
+}
+
+async function readStatus() {
+  const run = await runClaude(['auth', 'status', '--json'], 15_000);
+  if (run === null) return { installed: false, signedIn: false, plan: '' };
   try {
-    const s = JSON.parse(out);
+    const s = JSON.parse(run.out);
     return { installed: true, signedIn: s.loggedIn === true, plan: typeof s.subscriptionType === 'string' ? s.subscriptionType : '' };
   } catch {
     return { installed: true, signedIn: false, plan: '' };
@@ -454,6 +539,8 @@ async function authStatus() {
 let signingIn = null;
 /** Claude's sign-in page for the sign-in under way, for a browser that did not open by itself. */
 let signInUrl = '';
+/** Claude Code is asking for the code claude.ai shows, because the browser could not hand it over. */
+let needsCode = false;
 /**
  * Starts Claude Code's own sign-in: it opens claude.ai in this machine's browser, receives the
  * answer itself and keeps the result in its profile. The bridge and the game see neither the code
@@ -464,11 +551,15 @@ function startSignIn() {
   const child = spawn(CLAUDE, ['auth', 'login', '--claudeai'], { cwd: WORK_DIR, env: CLAUDE_ENV, windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
   signingIn = child;
   signInUrl = '';
+  needsCode = false;
+  statusCache = null;
   child.stdin.on('error', () => {});
   let out = '';
+  child.stdout.setEncoding('utf8');
   child.stdout.on('data', (d) => {
     out = (out + d).slice(-4000);
     signInUrl = /https:\/\/claude\.ai\/[^\s"'<>]+/.exec(out)?.[0] ?? signInUrl;
+    if (/paste|enter (the |your )?code|code here/i.test(out)) needsCode = true;
   });
   const timer = setTimeout(() => child.kill(), 5 * 60_000);
   const over = () => {
@@ -476,20 +567,48 @@ function startSignIn() {
     if (signingIn !== child) return;
     signingIn = null;
     signInUrl = '';
+    needsCode = false;
+    statusCache = null;
   };
   child.on('error', over);
   child.on('close', over);
   log('sign-in started: finish it in the browser window Claude Code opened');
 }
 
-/** Ends the game's connection to Claude: its sessions, a sign-in under way, and the sign-in it kept. */
+/** Hands Claude Code the code claude.ai showed, for a sign-in whose browser could not do it. */
+function enterCode(code) {
+  if (!signingIn || typeof code !== 'string' || !/^[\w#.~-]{8,512}$/.test(code)) return false;
+  signingIn.stdin.write(`${code}\n`);
+  needsCode = false;
+  return true;
+}
+
+/** Ends the game's connection to Claude: its sessions, a sign-in under way, and the sign-in it kept. Throws when it did not. */
 async function signOut() {
   signingIn?.kill();
-  for (const s of [...working.values(), ...oneShot.values()]) s.close();
-  working.clear();
-  oneShot.clear();
-  await runClaude(['auth', 'logout'], 15_000);
+  closeAll();
+  statusCache = null;
+  const run = await runClaude(['auth', 'logout'], 15_000);
+  statusCache = null;
+  if (!run || run.code !== 0 || (await authStatus()).signedIn) throw new Error('logout failed');
   log('signed out: the game is no longer connected to Claude');
+}
+
+/** A small JSON body, as text decoded whole (a character split across chunks stays intact). */
+function readBody(req, max) {
+  return new Promise((resolve, reject) => {
+    let raw = '';
+    req.setEncoding('utf8');
+    req.on('data', (d) => {
+      raw += d;
+      if (raw.length > max) {
+        reject(new Error('too large'));
+        req.destroy();
+      }
+    });
+    req.on('end', () => resolve(raw));
+    req.on('error', reject);
+  });
 }
 
 const server = createServer((req, res) => {
@@ -504,29 +623,37 @@ const server = createServer((req, res) => {
     );
   }
   if (req.method === 'GET' && path.endsWith('/auth')) {
-    return void authStatus().then((s) => send(res, 200, { ...s, signingIn: !!signingIn, url: signingIn ? signInUrl : '' }));
+    const now = { signingIn: !!signingIn, needsCode: !!signingIn && needsCode, url: signingIn ? signInUrl : '' };
+    // ?quick=1: only the sign-in under way, without asking Claude Code (which takes a moment).
+    if (/[?&]quick=1\b/.test(req.url ?? '')) return send(res, 200, now);
+    return void authStatus().then((s) => send(res, 200, { ...s, ...now }));
+  }
+  if (req.method === 'POST' && path.endsWith('/auth/code')) {
+    return void readBody(req, 4_000)
+      .then((raw) => send(res, enterCode(JSON.parse(raw).code) ? 200 : 400, { ok: true }))
+      .catch(() => send(res, 400, { error: { message: 'bad request' } }));
   }
   if (req.method === 'POST' && path.endsWith('/auth/login')) {
     startSignIn();
     return send(res, 202, { started: true });
   }
   if (req.method === 'POST' && path.endsWith('/auth/logout')) {
-    return void signOut().then(() => send(res, 200, { ok: true }));
+    return void signOut().then(
+      () => send(res, 200, { ok: true }),
+      () => send(res, 502, { error: { message: 'Claude Code could not sign out' } }),
+    );
   }
   if (req.method === 'POST' && path.endsWith('/chat/completions')) {
-    let raw = '';
-    req.on('data', (d) => {
-      raw += d;
-      if (raw.length > MAX_BODY) req.destroy();
-    });
-    req.on('end', async () => {
+    // Each model the game makes is one conversation; older games send none and share one.
+    const conversation = String(req.headers['x-worker755-conversation'] ?? '').slice(0, 100) || 'default';
+    void readBody(req, MAX_BODY).then(async (raw) => {
       // The game drops the request when a step is cancelled; the turn is cancelled with it.
       const abort = new AbortController();
       res.on('close', () => {
         if (!res.writableEnded) abort.abort();
       });
       try {
-        send(res, 200, await complete(JSON.parse(raw), abort.signal));
+        send(res, 200, await complete(JSON.parse(raw), abort.signal, conversation));
       } catch (err) {
         const status = Number(err?.status) || 500;
         // What went wrong is for this console only: Claude Code's own words may name this machine or its account.
@@ -534,7 +661,7 @@ const server = createServer((req, res) => {
         const message = (err?.status && err?.message) || 'bridge error';
         send(res, status === 499 ? 500 : status, { error: { message, type: 'claude_bridge_error', code: status } });
       }
-    });
+    }, () => send(res, 413, { error: { message: 'request too large' } }));
     return;
   }
   send(res, 404, { error: { message: 'not found' } });
@@ -554,8 +681,9 @@ function gameSetting(root, name) {
 server.listen(PORT, '127.0.0.1', () => {
   const url = `http://127.0.0.1:${PORT}/v1`;
   log(`Claude Code as a model server on ${url} (models: ${MODELS.join(', ')})`);
-  if (!process.argv.includes('--play')) {
-    if (!process.env.CLAUDE_BRIDGE_TOKEN) log(`start the game with LOCAL_LLM_URL=${url} LOCAL_LLM_KIND=claude-code LOCAL_LLM_API_KEY=${TOKEN}`);
+  if (!PLAY) {
+    // The token is the one you set; it is never printed.
+    log(`start the game with LOCAL_LLM_URL=${url} LOCAL_LLM_KIND=claude-code and LOCAL_LLM_API_KEY set to your CLAUDE_BRIDGE_TOKEN`);
     for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(0));
     return;
   }

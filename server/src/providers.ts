@@ -3,6 +3,7 @@
 // LOCAL_LLM_URL at a model server of their own (Ollama, llama.cpp, vLLM). A player's key lives only in that session's
 // memory: it is never logged, stored, or sent back to the browser.
 
+import { randomUUID } from 'node:crypto';
 import { createGateway } from 'ai';
 import type { LanguageModel } from 'ai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
@@ -84,6 +85,15 @@ export function localIsClaudeCode(): boolean {
   return !!localUrl() && process.env.LOCAL_LLM_KIND === 'claude-code';
 }
 
+/**
+ * Sent with every request to the local server. The Claude Code bridge answers only requests that say
+ * the game knows it is Claude Code, so a bridge set up without LOCAL_LLM_KIND (and so without the
+ * this-machine-only rule) refuses to work rather than serving everyone.
+ */
+export function localHeaders(): Record<string, string> {
+  return localIsClaudeCode() ? { 'x-worker755-kind': 'claude-code' } : {};
+}
+
 const CLAUDE_CODE: ProviderInfo = {
   id: 'local',
   label: 'Claude Code (local)',
@@ -133,7 +143,13 @@ export function languageModel(cred: Credentials, id: string): LanguageModel {
   }
   if (cred.provider === 'local') {
     // The chat completions API: Ollama, llama.cpp and vLLM all serve it, tools included.
-    const local = createOpenAI({ baseURL: localUrl() ?? undefined, apiKey: process.env.LOCAL_LLM_API_KEY || 'local' });
+    // Each model made here is one conversation (a shift's manager, or its user), so a server that keeps
+    // sessions, like the Claude Code bridge, never mixes two of them.
+    const local = createOpenAI({
+      baseURL: localUrl() ?? undefined,
+      apiKey: process.env.LOCAL_LLM_API_KEY || 'local',
+      headers: { ...localHeaders(), 'x-worker755-conversation': randomUUID() },
+    });
     return local.chat(id);
   }
   if (cred.provider === 'anthropic') return createAnthropic({ apiKey: cred.apiKey })(providerModelId('anthropic', id));

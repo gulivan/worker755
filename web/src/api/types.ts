@@ -138,6 +138,8 @@ export interface ClaudeCodeStatus {
   signedIn: boolean;
   plan: string;
   signingIn: boolean;
+  /** Claude Code is waiting for the code claude.ai shows, because the browser could not hand it over. */
+  needsCode?: boolean;
   /** Claude's sign-in page, while a sign-in is under way. */
   url: string;
 }

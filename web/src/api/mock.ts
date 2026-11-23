@@ -339,7 +339,7 @@ export function createMockClient(): GameClient {
       throw new ApiError(409, 'The shift is not waiting.');
     },
     async claudeCode() {
-      return { installed: true, signedIn: true, plan: '', signingIn: false, url: '' };
+      return { installed: true, signedIn: true, plan: '', signingIn: false, needsCode: false, url: '' };
     },
     async checkKey() {
       await delay(250);

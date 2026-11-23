@@ -2,7 +2,7 @@ import type { ClaudeCodeStatus, ExecResponse, ExecResult, GameEvent, KeyModels, 
 import type { Face } from '../game/avatar';
 import { ApiError } from './errors';
 import { createMockClient } from './mock';
-import { t } from '../i18n';
+import { currentLanguage, t } from '../i18n';
 import { LocalShell } from '../shell/local';
 import type { Snapshot } from '../shell/local';
 import type { Change } from '../shell/protocol';
@@ -68,7 +68,7 @@ export interface GameClient {
   /** Checks a player's key with its provider and lists every model it can use. */
   checkKey(key: { provider: Provider; apiKey: string; language: string }): Promise<KeyModels>;
   /** Whether the game is connected to Claude through Claude Code here; an action first starts its sign-in or signs it out. */
-  claudeCode(action?: 'signIn' | 'signOut'): Promise<ClaudeCodeStatus>;
+  claudeCode(action?: 'signIn' | 'signOut' | 'code', code?: string): Promise<ClaudeCodeStatus>;
 }
 
 /**
@@ -107,6 +107,15 @@ const REQUEST_TIMEOUT_MS = 30_000;
 /** The shell waits on these, so a lost one must not hold up the terminal for long. */
 const SHELL_REQUEST_TIMEOUT_MS = 12_000;
 
+/** A host name that only a private network can reach: RFC 1918 and link-local addresses, .local, .lan, .internal, .home.arpa, or one word. */
+export function onPrivateNetwork(host: string): boolean {
+  const h = host.toLowerCase().replace(/^\[|\]$/g, '');
+  if (/^(10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)\d{1,3}\.\d{1,3}(\.\d{1,3})?$/.test(h)) return true;
+  if (/^f[cd][0-9a-f]{2}:|^fe80:/.test(h)) return true;
+  if (/\.(local|lan|internal|home\.arpa)$/.test(h)) return true;
+  return /^[a-z0-9-]+$/.test(h);
+}
+
 async function request<T>(
   method: string,
   url: string,
@@ -114,8 +123,9 @@ async function request<T>(
   extra: Record<string, string> = {},
   timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<T> {
-  // A key goes out only over a connection nobody can listen in on: HTTPS, or this computer itself.
-  if (!window.isSecureContext && body && typeof body === 'object' && 'apiKey' in body && body.apiKey) {
+  // A key goes out only over a connection nobody on the internet can listen in on: HTTPS, this
+  // computer, or a private network (a game run at home on http://192.168.x.x or http://pc.local).
+  if (!window.isSecureContext && !onPrivateNetwork(location.hostname) && body && typeof body === 'object' && 'apiKey' in body && body.apiKey) {
     throw new ApiError(0, t('errors.insecureKey'));
   }
   let res: Response;
@@ -295,7 +305,11 @@ function createRealClient(): GameClient {
     finishShift: (id) => request<{ ok: true }>('POST', `${s(id)}/finish`, undefined, owner(id)),
     resumeShift: (id) => request<{ ok: true }>('POST', `${s(id)}/resume`, undefined, owner(id)),
     checkKey: (key) => request<KeyModels>('POST', '/api/models/check', key),
-    claudeCode: (action) => request<ClaudeCodeStatus>(action ? 'POST' : 'GET', '/api/claude-code', action ? { action } : undefined),
+    claudeCode: (action, code) =>
+      // Starting a sign-in waits for Claude Code to print its page, and signing out for it to finish.
+      action
+        ? request<ClaudeCodeStatus>('POST', '/api/claude-code', { action, language: currentLanguage(), ...(code ? { code } : {}) }, {}, 60_000)
+        : request<ClaudeCodeStatus>('GET', `/api/claude-code?language=${encodeURIComponent(currentLanguage())}`, undefined, {}, 60_000),
     getReview: (id) => request<SharedReview>('GET', `/api/reviews/${encodeURIComponent(id)}`),
     subscribe(id, after, handlers) {
       let lastSeq = after;
