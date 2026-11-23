@@ -558,7 +558,8 @@ function startSignIn() {
   child.stdout.setEncoding('utf8');
   child.stdout.on('data', (d) => {
     out = (out + d).slice(-4000);
-    signInUrl = /https:\/\/claude\.ai\/[^\s"'<>]+/.exec(out)?.[0] ?? signInUrl;
+    // Claude Code prints its sign-in page on claude.ai or claude.com (and Anthropic's own hosts for console sign-in).
+    signInUrl = /https:\/\/(?:[a-z0-9-]+\.)*(?:claude\.ai|claude\.com|anthropic\.com)\/[^\s"'<>]+/i.exec(out)?.[0] ?? signInUrl;
     if (/paste|enter (the |your )?code|code here/i.test(out)) needsCode = true;
   });
   const timer = setTimeout(() => child.kill(), 5 * 60_000);

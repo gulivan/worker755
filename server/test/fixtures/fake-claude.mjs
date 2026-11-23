@@ -15,7 +15,7 @@ if (args[0] === 'auth' && args[1] === 'status') {
   if (existsSync(join(dir, 'logout-fails'))) process.exit(1);
   rmSync(signedIn, { force: true });
 } else if (args[0] === 'auth' && args[1] === 'login') {
-  process.stdout.write('Opening https://claude.ai/oauth/authorize?code=true\nPaste code here if prompted > ');
+  process.stdout.write('Opening https://claude.com/cai/oauth/authorize?code=true\nPaste code here if prompted > ');
   createInterface({ input: process.stdin }).once('line', (code) => {
     if (code.trim() === 'code-12345678') writeFileSync(signedIn, '');
     process.exit(0);

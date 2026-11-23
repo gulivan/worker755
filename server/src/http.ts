@@ -823,8 +823,8 @@ export function createApp(opts: AppOptions): App {
         plan: typeof s.plan === 'string' ? s.plan.slice(0, 40) : '',
         signingIn: s.signingIn === true,
         needsCode: s.signingIn === true && s.needsCode === true,
-        // Only ever Claude's own sign-in page.
-        url: typeof s.url === 'string' && /^https:\/\/claude\.ai\/[^\s"'<>]{1,2000}$/.test(s.url) ? s.url : '',
+        // Only ever Claude's own sign-in page (claude.ai, claude.com, anthropic.com).
+        url: typeof s.url === 'string' && /^https:\/\/(?:[a-z0-9-]+\.)*(?:claude\.ai|claude\.com|anthropic\.com)\/[^\s"'<>]{1,2000}$/i.test(s.url) ? s.url : '',
       });
     }
 

@@ -32,6 +32,11 @@ export function ClaudeCodeAuth({ className, onChange }: { className?: string; on
       setDown(false);
       setProblem('');
       if (s.signedIn || (action !== 'signIn' && !s.signingIn)) setWaiting(false);
+      // A sign-in already under way (the player switched away and back) is picked up again.
+      else if (s.signingIn && !action) {
+        if (until.current < Date.now()) until.current = Date.now() + POLL_FOR_MS;
+        setWaiting(true);
+      }
       // The models on offer follow the connection, so the form hears of it first and whenever it changes.
       if (was.current !== s.signedIn) onChange?.(s.signedIn);
       was.current = s.signedIn;

@@ -85,7 +85,7 @@ test('sign-in by code, separate conversations, no orphaned processes, and a real
     quick = (await call('/auth?quick=1')).body;
   }
   assert.equal(quick.needsCode, true);
-  assert.match(quick.url, /^https:\/\/claude\.ai\//);
+  assert.match(quick.url, /^https:\/\/claude\.com\//, 'the page Claude Code printed, on claude.com too');
   assert.equal((await call('/auth/code', { body: { code: 'bad code!' } })).status, 400);
   assert.equal((await call('/auth/code', { body: { code: 'code-12345678' } })).status, 200);
   let status: Record<string, any> = {};
