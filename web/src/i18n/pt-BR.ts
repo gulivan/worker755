@@ -130,6 +130,7 @@ export const ptBR: Catalogue = {
   'claude.codeLabel': 'Cole o código do claude.ai',
   'claude.codeSend': 'Conectar',
   'claude.note': '<strong>Sua conta do Claude, conectada só para este jogo neste computador.</strong> Você faz login em claude.ai e o Claude Code guarda o login; o jogo nunca vê sua senha, código ou tokens. Desconectar remove o login.',
+  'claude.risk': '<strong>Por sua conta e risco.</strong> Os termos da Anthropic talvez não permitam usar uma assinatura do Claude para alimentar outros aplicativos, e sua conta pode ser limitada. O jeito recomendado é usar uma chave de API da Anthropic: selecione Anthropic em Sua chave de API.',
   'key.failed': 'Não foi possível verificar a chave. Tente de novo.',
   'key.recommended': 'Recomendado',
   'key.other': 'Outro',

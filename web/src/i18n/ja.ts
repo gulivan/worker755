@@ -130,6 +130,7 @@ export const ja: Catalogue = {
   'claude.codeLabel': 'claude.ai のコードを貼り付けて',
   'claude.codeSend': '接続',
   'claude.note': '<strong>あなたの Claude アカウントを、このコンピューター上のこのゲームだけに接続します。</strong>サインインは claude.ai で行い、Claude Code がそれを保持します。ゲームがパスワード、コード、トークンを見ることはありません。接続を解除すると削除されます。',
+  'claude.risk': '<strong>自己責任でご利用ください。</strong>Anthropicの利用規約では、Claudeのサブスクリプションを他のアプリで使うことが認められていない場合があり、アカウントが制限される可能性があります。正式にサポートされている方法はAnthropic APIキーです。「自分の API キー」でAnthropicを選んでください。',
   'key.failed': 'キーを確認できませんでした。もう一度お試しください。',
   'key.recommended': 'おすすめ',
   'key.other': 'その他',

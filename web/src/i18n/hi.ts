@@ -130,6 +130,7 @@ export const hi: Catalogue = {
   'claude.codeLabel': 'claude.ai से कोड पेस्ट करो',
   'claude.codeSend': 'कनेक्ट करो',
   'claude.note': '<strong>तुम्हारा Claude अकाउंट, सिर्फ़ इस गेम के लिए और सिर्फ़ इसी कंप्यूटर पर कनेक्ट।</strong> तुम claude.ai पर साइन इन करते हो और Claude Code साइन-इन को अपने पास रखता है; गेम कभी तुम्हारा पासवर्ड, कोड या टोकन नहीं देखता। डिस्कनेक्ट करने पर यह हट जाता है।',
+  'claude.risk': '<strong>अपनी ज़िम्मेदारी पर इस्तेमाल करें।</strong> Anthropic की शर्तें Claude सब्सक्रिप्शन को दूसरे ऐप्स चलाने की अनुमति शायद न दें, और आपका अकाउंट सीमित किया जा सकता है। सही तरीका है Anthropic API key: आपकी API कुंजी के नीचे Anthropic चुनें।',
   'key.failed': 'की की जाँच नहीं हो सकी। फिर कोशिश करो।',
   'key.recommended': 'अनुशंसित',
   'key.other': 'अन्य',

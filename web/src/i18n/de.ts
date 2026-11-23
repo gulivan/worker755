@@ -130,6 +130,7 @@ export const de: Catalogue = {
   'claude.codeLabel': 'Code von claude.ai einfügen',
   'claude.codeSend': 'Verbinden',
   'claude.note': '<strong>Dein Claude-Konto, nur für dieses Spiel auf diesem Computer verbunden.</strong> Du meldest dich auf claude.ai an, und Claude Code bewahrt die Anmeldung auf; das Spiel sieht weder Passwort noch Code oder Tokens. „Trennen“ entfernt sie.',
+  'claude.risk': '<strong>Auf eigene Gefahr.</strong> Laut den Nutzungsbedingungen von Anthropic darf ein Claude-Abo möglicherweise nicht für andere Apps verwendet werden. Dein Konto könnte deshalb eingeschränkt werden. Unterstützt wird die Nutzung mit einem Anthropic-API-Schlüssel: Wähle unter Dein API-Schlüssel Anthropic aus.',
   'key.failed': 'Der Schlüssel konnte nicht geprüft werden. Versuch’s noch mal.',
   'key.recommended': 'Empfohlen',
   'key.other': 'Andere',

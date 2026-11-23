@@ -130,6 +130,7 @@ export const es: Catalogue = {
   'claude.codeLabel': 'Pega el código de claude.ai',
   'claude.codeSend': 'Conectar',
   'claude.note': '<strong>Tu cuenta de Claude, conectada solo para este juego en este ordenador.</strong> Inicias sesión en claude.ai y Claude Code guarda la sesión; el juego nunca ve tu contraseña, código ni tokens. Desconectar la elimina.',
+  'claude.risk': '<strong>Bajo tu responsabilidad.</strong> Es posible que las condiciones de Anthropic no permitan usar una suscripción de Claude para dar servicio a otras aplicaciones, y podrían limitar tu cuenta. La opción compatible es usar una clave de API de Anthropic: selecciona Anthropic en Tu clave API.',
   'key.failed': 'No se pudo comprobar la clave. Inténtalo de nuevo.',
   'key.recommended': 'Recomendado',
   'key.other': 'Otro',

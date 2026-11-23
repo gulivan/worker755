@@ -3969,3 +3969,6 @@ html[lang='zh-CN'] body, html[lang='ja'] body, html[lang='hi'] body { line-heigh
   display: grid;
   gap: 8px;
 }
+.key-note.key-risk {
+  border-left-color: var(--stamp);
+}

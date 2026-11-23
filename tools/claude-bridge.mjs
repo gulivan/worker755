@@ -681,6 +681,7 @@ function gameSetting(root, name) {
 server.listen(PORT, '127.0.0.1', () => {
   const url = `http://127.0.0.1:${PORT}/v1`;
   log(`Claude Code as a model server on ${url} (models: ${MODELS.join(', ')})`);
+  log('At your own risk: Anthropic\'s terms may not allow a Claude subscription to power other apps, and your account could be limited. The supported way is an Anthropic API key.');
   if (!PLAY) {
     // The token is the one you set; it is never printed.
     log(`start the game with LOCAL_LLM_URL=${url} LOCAL_LLM_KIND=claude-code and LOCAL_LLM_API_KEY set to your CLAUDE_BRIDGE_TOKEN`);

@@ -132,6 +132,7 @@ export const en = {
   'claude.codeLabel': 'Paste the code from claude.ai',
   'claude.codeSend': 'Connect',
   'claude.note': '<strong>Your Claude account, connected for this game on this computer only.</strong> You sign in on claude.ai and Claude Code keeps the sign-in; the game never sees your password, code or tokens. Disconnect removes it.',
+  'claude.risk': '<strong>At your own risk.</strong> Anthropic\'s terms may not allow a Claude subscription to power other apps, and your account could be limited. The supported way is an Anthropic API key: pick Anthropic under Your API key.',
   'key.failed': 'Could not check the key. Try again.',
   'key.recommended': 'Recommended',
   'key.other': 'Other',

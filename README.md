@@ -81,6 +81,12 @@ point. In Docker, reach a server on the host at `http://host.docker.internal:114
 
 ### Claude Code as the manager
 
+> **At your own risk.** This runs the game on your personal Claude subscription. Anthropic's terms
+> may not allow a subscription to power third-party apps, and your account could be limited. The
+> supported way is an Anthropic API key: pick **Anthropic** under **Your API key** on the start
+> screen. Claude subscriptions don't include API access; API usage is billed separately at
+> [console.anthropic.com](https://console.anthropic.com).
+
 If you use [Claude Code](https://code.claude.com), the manager can run on its sign-in instead of an
 API key:
 

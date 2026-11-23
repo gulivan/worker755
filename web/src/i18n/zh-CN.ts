@@ -130,6 +130,7 @@ export const zhCN: Catalogue = {
   'claude.codeLabel': '粘贴来自 claude.ai 的代码',
   'claude.codeSend': '连接',
   'claude.note': '<strong>你的 Claude 账户，仅为这台电脑上的这个游戏连接。</strong>你在 claude.ai 上登录，由 Claude Code 保存登录状态；游戏永远看不到你的密码、验证码或令牌。断开连接会将其移除。',
+  'claude.risk': '<strong>风险自负。</strong>Anthropic 的条款可能不允许 Claude 订阅用于驱动其他应用，你的账号也可能因此受限。受支持的方式是使用 Anthropic API 密钥：在“你的 API 密钥”下选择 Anthropic。',
   'key.failed': '无法检查密钥。再试一次。',
   'key.recommended': '推荐',
   'key.other': '其他',
