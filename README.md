@@ -79,6 +79,27 @@ newer, Mistral Small). Small models give up or loop more often; that is part of 
 point. In Docker, reach a server on the host at `http://host.docker.internal:11434/v1`
 (`--add-host=host.docker.internal:host-gateway` on Linux).
 
+### Claude Code as the manager
+
+If you use [Claude Code](https://code.claude.com), the manager can run on its sign-in instead of an
+API key:
+
+```sh
+npm run play:claude    # http://127.0.0.1:8755, provider "Claude Code (local)"
+```
+
+`tools/claude-bridge.mjs` stands in for a local model server and answers with Claude Code; a shift's
+manager is one Claude Code session that stays open. The game's connection to Claude is its own,
+kept apart from the Claude Code you work with: on the start screen, **Connect to Claude** opens
+claude.ai to sign in and **Disconnect** removes the connection again. The sign-in is carried out
+and kept by Claude Code (in `%LOCALAPPDATA%\worker755\claude-code`, or
+`~/.local/share/worker755/claude-code`): the game never sees a Claude password, code or token.
+
+This is for playing on your own computer only, because it runs on your own Claude account. The
+bridge listens on 127.0.0.1 and answers only the game, the game offers it only to a browser on the
+same machine, and `play:claude` refuses to start with `HOST` or `TRUST_PROXY` set for hosting. A
+hosted game takes each player's own API key.
+
 ### Docker
 
 ```sh

@@ -1,4 +1,4 @@
-import type { ExecResponse, ExecResult, GameEvent, KeyModels, MachineEvent, ModelList, Persona, Provider, SessionState, SharedReview, Workplace } from './types';
+import type { ClaudeCodeStatus, ExecResponse, ExecResult, GameEvent, KeyModels, MachineEvent, ModelList, Persona, Provider, SessionState, SharedReview, Workplace } from './types';
 import type { Face } from '../game/avatar';
 import { ApiError } from './errors';
 import { createMockClient } from './mock';
@@ -67,6 +67,8 @@ export interface GameClient {
   resumeShift(id: string): Promise<{ ok: true }>;
   /** Checks a player's key with its provider and lists every model it can use. */
   checkKey(key: { provider: Provider; apiKey: string; language: string }): Promise<KeyModels>;
+  /** Whether the game is connected to Claude through Claude Code here; an action first starts its sign-in or signs it out. */
+  claudeCode(action?: 'signIn' | 'signOut'): Promise<ClaudeCodeStatus>;
 }
 
 /**
@@ -112,6 +114,10 @@ async function request<T>(
   extra: Record<string, string> = {},
   timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<T> {
+  // A key goes out only over a connection nobody can listen in on: HTTPS, or this computer itself.
+  if (!window.isSecureContext && body && typeof body === 'object' && 'apiKey' in body && body.apiKey) {
+    throw new ApiError(0, t('errors.insecureKey'));
+  }
   let res: Response;
   try {
     res = await fetch(url, {
@@ -289,6 +295,7 @@ function createRealClient(): GameClient {
     finishShift: (id) => request<{ ok: true }>('POST', `${s(id)}/finish`, undefined, owner(id)),
     resumeShift: (id) => request<{ ok: true }>('POST', `${s(id)}/resume`, undefined, owner(id)),
     checkKey: (key) => request<KeyModels>('POST', '/api/models/check', key),
+    claudeCode: (action) => request<ClaudeCodeStatus>(action ? 'POST' : 'GET', '/api/claude-code', action ? { action } : undefined),
     getReview: (id) => request<SharedReview>('GET', `/api/reviews/${encodeURIComponent(id)}`),
     subscribe(id, after, handlers) {
       let lastSeq = after;

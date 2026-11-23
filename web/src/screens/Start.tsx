@@ -10,6 +10,7 @@ import { loadFace, randomFace, saveFace } from '../game/avatar';
 import { loadKey, loadPicks, saveKey, savePicks } from '../game/apiKey';
 import { useLanyard } from '../game/useLanyard';
 import { KeyCheckRow, ModelOptions, useKeyCheck } from '../components/KeyCheck';
+import { ClaudeCodeAuth } from '../components/ClaudeCodeAuth';
 import { ShiftOffer } from '../components/ShiftOffer';
 import { UsageMeter } from '../components/Usage';
 import type { OfferKind } from '../components/ShiftOffer';
@@ -198,6 +199,8 @@ export function Start({ onStart }: Props) {
   /** A local model server takes no key: the key field goes, and its models are listed at once. */
   const keyless = keyInfo?.needsKey === false;
   const keyCheck = useKeyCheck(provider, apiKey, !keyless);
+  /** Claude Code has models to list only once the game is connected to Claude. */
+  const [claudeConnected, setClaudeConnected] = useState(false);
   // Where the server has a local model server, it is the default for a player with no saved key.
   const localDefault = useRef(false);
   useEffect(() => {
@@ -509,7 +512,16 @@ export function Start({ onStart }: Props) {
                   />
                 </div>
                 )}
-                <KeyCheckRow check={keyCheck} className="form-span" />
+                {keyInfo?.kind === 'claude-code' && (
+                  <ClaudeCodeAuth
+                    className="form-span"
+                    onChange={(connected) => {
+                      setClaudeConnected(connected);
+                      if (connected) void keyCheck.check();
+                    }}
+                  />
+                )}
+                {(keyInfo?.kind !== 'claude-code' || claudeConnected) && <KeyCheckRow check={keyCheck} className="form-span" />}
                 {!keyless && (
                 <p className="key-note form-span">
                   <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden>

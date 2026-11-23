@@ -3963,3 +3963,9 @@ html[lang='zh-CN'] body, html[lang='ja'] body, html[lang='hi'] body { line-heigh
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ---------- Claude Code on this computer as the manager ---------- */
+.claude-auth {
+  display: grid;
+  gap: 8px;
+}

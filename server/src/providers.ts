@@ -18,6 +18,8 @@ export interface ProviderInfo {
   keyUrl: string;
   /** False for a local server, which takes no key from the player. */
   needsKey?: boolean;
+  /** 'claude-code': the local server is Claude Code on the operator's own sign-in (tools/claude-bridge.mjs). */
+  kind?: 'claude-code';
 }
 
 export const PROVIDERS: ProviderInfo[] = [
@@ -74,9 +76,25 @@ const LOCAL: ProviderInfo = {
   needsKey: false,
 };
 
+/**
+ * True when the local server is Claude Code on the operator's own account. It is then for the
+ * operator alone: only a player on this very machine is offered it or may use it (see http.ts).
+ */
+export function localIsClaudeCode(): boolean {
+  return !!localUrl() && process.env.LOCAL_LLM_KIND === 'claude-code';
+}
+
+const CLAUDE_CODE: ProviderInfo = {
+  id: 'local',
+  label: 'Claude Code (local)',
+  keyUrl: 'https://code.claude.com/docs/en/setup',
+  needsKey: false,
+  kind: 'claude-code',
+};
+
 /** The providers on offer here: the local server comes first when there is one. */
 export function providerList(): ProviderInfo[] {
-  return localUrl() ? [LOCAL, ...PROVIDERS] : PROVIDERS;
+  return localUrl() ? [localIsClaudeCode() ? CLAUDE_CODE : LOCAL, ...PROVIDERS] : PROVIDERS;
 }
 
 export function isProviderId(v: unknown): v is ProviderId {

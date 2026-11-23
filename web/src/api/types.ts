@@ -132,6 +132,16 @@ export type Character = Persona | 'custom';
 /** 'local': a model server of the operator's own (Ollama, llama.cpp, vLLM), offered only where one is set up. */
 export type Provider = 'openrouter' | 'gateway' | 'anthropic' | 'openai' | 'deepseek' | 'local';
 
+/** Claude Code on this computer: whether it is there and signed in. Never who it is signed in as. */
+export interface ClaudeCodeStatus {
+  installed: boolean;
+  signedIn: boolean;
+  plan: string;
+  signingIn: boolean;
+  /** Claude's sign-in page, while a sign-in is under way. */
+  url: string;
+}
+
 export interface ModelList {
   models: { id: string; label: string }[];
   subagents: string[];
@@ -146,7 +156,7 @@ export interface ModelList {
   free: boolean;
   /** Where a player's own key can come from. */
   /** needsKey false: the provider takes no key from the player. */
-  providers: { id: Provider; label: string; keyUrl: string; needsKey?: boolean }[];
+  providers: { id: Provider; label: string; keyUrl: string; needsKey?: boolean; kind?: 'claude-code' }[];
   donateUrl: string;
   sourceUrl: string;
   sharing: boolean;

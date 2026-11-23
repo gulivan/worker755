@@ -338,6 +338,9 @@ export function createMockClient(): GameClient {
     async resumeShift() {
       throw new ApiError(409, 'The shift is not waiting.');
     },
+    async claudeCode() {
+      return { installed: true, signedIn: true, plan: '', signingIn: false, url: '' };
+    },
     async checkKey() {
       await delay(250);
       return { models: [{ id: 'mock/manager', label: 'Scripted manager' }], default: 'mock/manager' };

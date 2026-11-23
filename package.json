@@ -11,6 +11,7 @@
     "setup": "npm ci --prefix server && npm ci --prefix web",
     "build": "npm run build --prefix web",
     "start": "node --env-file-if-exists=.env server/src/index.ts",
+    "play:claude": "node tools/claude-bridge.mjs --play",
     "mock": "MOCK_LLM=1 node server/src/index.ts",
     "dev:web": "npm run dev --prefix web",
     "test": "npm test --prefix shell && npm test --prefix server",
